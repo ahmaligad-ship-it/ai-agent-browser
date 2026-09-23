@@ -1,0 +1,114 @@
+
+أنت نموذج ذكي متطور عندك بيئة بناء وتطوير الأندرويد الكاملة (Android SDK, Gradle, JDK 21)
+مهمتك: تحويل مشروع Gemini File Commander الموجود في www/ إلى APK جاهز بمتطلبات أندرويد 16 الأحدث.
+
+=== 1. معلومات المشروع ===
+- اسم التطبيق: Gemini File Commander
+- Package: com.geminifm.commander
+- نوع التطبيق: WebView wrapper حول www/index.html + www/app.js + www/style.css
+- المبدأ: لا ترفع محتوى الملفات - فقط metadata يرسل لـ Gemini API عبر fetch من JS
+
+=== 2. متطلبات أندرويد 16 المؤكدة (بحثتها) ===
+من Google Play:
+- targetSdkVersion = 36 (Android 16 Baklava) إجباري من 31 أغسطس 2026
+- compileSdk = 36
+- minSdk = 24 (Android 7.0) - الحد الأدنى للتثبيت على Android 16
+- AGP 8.6.1+ إلى 9.1.1, Gradle 8.14.5
+- buildTools 36.0.0, NDK r28 (لـ 16KB ELF alignment المطلوب مع API 36)
+- namespace com.geminifm.commander
+المصدر: Play requires targetSdk >=36 from 2026-08-31
+
+=== 3. الصلاحيات المطلوبة ===
+- MANAGE_EXTERNAL_STORAGE (للتحكم الكامل - مع Intent للطلب في Android 11+)
+- READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO (Android 13+)
+- READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE (توافق)
+- PACKAGE_USAGE_STATS (لمعرفة last_opened و opens - مهم جداً لفكرة انتهاء الصلاحية)
+- INTERNET (لـ Gemini API)
+- ACCESS_MEDIA_LOCATION (اختياري لإعادة التسمية الزمنية بالـ EXIF)
+
+=== 4. ما يجب أن تبنيه ===
+
+A) إنشاء مشروع Gradle:
+android/
+  app/
+    build.gradle.kts:
+      plugins { id("com.android.application") }
+      android {
+        namespace = "com.geminifm.commander"
+        compileSdk = 36
+        defaultConfig {
+          applicationId = "com.geminifm.commander"
+          minSdk = 24
+          targetSdk = 36
+          versionCode = 1
+          versionName = "1.0.0"
+        }
+        buildTypes { release { isMinifyEnabled = false } }
+        compileOptions { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21 }
+      }
+      dependencies { implementation("androidx.webkit:webkit:1.12.1") }
+    src/main/
+      AndroidManifest.xml (استخدم القالب في android-template/AndroidManifest.xml)
+      java/com/geminifm/commander/MainActivity.kt:
+        - WebView مع setJavaScriptEnabled(true), allowFileAccess, DOM storage
+        - addJavascriptInterface FileBridge (أنشئ الكلاس)
+        - FileBridge methods:
+          @JavascriptInterface fun getFilesJson(): String -> يرجع JSON array لكل الملفات مع {name, path, source (من MediaStore ownerPackage أو DownloadManager), created (File.lastModified), last_opened (من UsageStatsManager queryUsageStats + StorageManager), opens (count من UsageStats), size, sizeBytes, type (extension), hash (SHA256 محسوب محلياً لأول 1MB فقط لتوفير البطارية - بدون رفع)}
+          @JavascriptInterface fun deleteFile(path: String): Boolean -> ينقل إلى /Trash/GeminiCommander/ مع الاحتفاظ 30 يوم
+          @JavascriptInterface fun renameFile(oldPath: String, newName: String): Boolean
+          @JavascriptInterface fun createFolder(path: String): Boolean
+          @JavascriptInterface fun moveFile(src: String, dest: String): Boolean
+          @JavascriptInterface fun requestAllFilesPermission() -> يفتح Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
+          @JavascriptInterface fun requestUsageStats() -> يفتح Settings.ACTION_USAGE_ACCESS_SETTINGS
+        - onCreate: يفتح www/index.html من assets (انسخ www إلى assets/www) عبر webView.loadUrl("file:///android_asset/www/index.html")
+        - معالجة الرجوع + سلة مهملات
+
+B) نسخ www إلى app/src/main/assets/www/
+
+C) بناء APK:
+./gradlew assembleDebug -> ينتج app-debug.apk
+./gradlew assembleRelease مع signingConfig (أنشئ keystore مؤقت إذا لم يوجد)
+
+D) إضافات ذكية للـ APK:
+- Splash screen بسيط بشعار 🧠
+- أيقونة adaptive: 🗂️ مع gradient #7c5cff -> #00e5ff
+- معالجة scoped storage في Android 16: استخدم MediaStore + File API مع MANAGE_ALL_FILES
+- لا تطلب INTERNET إلا عند استدعاء Gemini (مذكور في البوابة)
+- تأكد أن WebView يسمح بـ fetch إلى https://generativelanguage.googleapis.com
+
+=== 5. نماذج Gemini التي يجب دعمها في الإعدادات ===
+في JS موجودة لكن في Native أيضاً اعرضها:
+- gemini-3.8-flash (موصى به) - GA 2026-09-02 - newest Flash tuned for long-horizon coding and autonomous agents
+- gemini-3.6-flash - GA 2026-07-21 - previous generation balanced
+- gemini-3.5-flash-lite - GA 2026-07-21 - lowest-cost
+- gemini-3.5-flash
+المصدر: Gemini 3.8/3.6 Flash availability via OpenRouter and changelogs (بحث مؤكد)
+استخدم endpoint: https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key=API_KEY
+مع responseMimeType: application/json
+
+=== 6. منطق إعادة التسمية الزمنية بدون رفع ===
+- في FileBridge: اقرأ EXIF للصور (ExifInterface) و creation date للفيديو (MediaStore.DATE_TAKEN)
+- رتب الملفات حسب created ascending
+- اقترح أسماء: YYYY-MM-DD_HH-MM-SS_{source}_{index}.ext
+- نفذ عبر JS يأمر Native: window.FileBridge.renameFile(oldPath, newName)
+
+=== 7. اختبار ===
+- بعد البناء: ثبت APK على emulator API 36
+- امنح All files access + Usage access
+- افتح التطبيق، ضع API Key، اضغط "افحص الآن" - يجب أن يرى ملفات حقيقية
+- جرب صلاحية جزئية: احذف ملف -> يذهب للطابور
+- جرب صلاحية كاملة: احذف -> يذهب للسلة
+- جرب إعادة تسمية زمنية: يجب أن يعيد تسمية الصور حسب التاريخ
+
+=== 8. GitHub Actions (موجود في .github/workflows/build.yml) ===
+- يستخدم actions: setup-java@v4 (java 21), gradle, android SDK 36
+- يبني APK تلقائياً
+
+=== 9. لا تنس ===
+- لا ترفع محتوى أي ملف للسحابة - فقط metadata
+- احترم trust levels: لا تحذف red أبداً
+- سلة مهملات 30 يوم
+- API Key يبقى في SharedPreferences فقط
+
+ابدأ الآن: أنشئ المشروع، انسخ www، ابنِ MainActivity.kt مع FileBridge كامل، ثم شغّل gradle build.
+

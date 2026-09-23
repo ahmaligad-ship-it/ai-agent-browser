@@ -1,0 +1,185 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Gemini File Commander 🧠</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <!-- API Key Gate -->
+  <div id="api-gate" class="gate">
+    <div class="gate-card">
+      <div class="logo-3d">🧠</div>
+      <h1>Gemini File Commander</h1>
+      <p class="sub">مدير ملفات ذكي 100% برايفت — لا يرفع محتوى الملفات، فقط الأسماء والميتاداتا</p>
+      
+      <div class="model-badges">
+        <span class="badge active">gemini-3.8-flash ⚡ newest</span>
+        <span class="badge">gemini-3.6-flash</span>
+        <span class="badge">gemini-3.5-flash-lite 💰</span>
+      </div>
+
+      <label>مفتاح Gemini API</label>
+      <div class="input-row">
+        <input id="apiKeyInput" type="password" placeholder="AIzaSy...">
+        <button id="pasteBtn">📋</button>
+      </div>
+      <p class="hint">يتم حفظه محلياً فقط على جهازك — لا يخرج أبداً. احصل عليه من aistudio.google.com</p>
+      
+      <label>اختر النموذج الافتراضي</label>
+      <select id="modelSelect">
+        <option value="gemini-3.8-flash">gemini-3.8-flash - أقوى للـ Agents (موصى به) - GA 2026-09-02</option>
+        <option value="gemini-3.6-flash">gemini-3.6-flash - متوازن وسريع</option>
+        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite - أرخص وأسرع للمسح اليومي</option>
+        <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+      </select>
+
+      <button id="saveKeyBtn" class="primary">🚀 ابدأ التحكم الذكي</button>
+      <p class="privacy">🔒 المبدأ الذهبي: <b>لا يتم رفع محتوى أي ملف</b> — نرسل فقط JSON مثل {name, path, source, dates, size}</p>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <header class="topbar">
+    <div class="left">
+      <div class="app-icon">🗂️</div>
+      <div>
+        <b>Gemini Commander</b>
+        <small id="modelLabel">3.8-flash</small>
+      </div>
+    </div>
+    <div class="right">
+      <button id="settingsBtn">⚙️</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button data-tab="dashboard" class="active">🏠 لوحة</button>
+    <button data-tab="explorer">📁 الملفات</button>
+    <button data-tab="gemini">🧠 جيميناي</button>
+    <button data-tab="queue">⏳ الطابور <span id="queueCount">0</span></button>
+  </div>
+
+  <main>
+    <!-- Dashboard -->
+    <section id="tab-dashboard" class="tab active">
+      <div class="cards">
+        <div class="stat-card 3d">
+          <span class="emoji">🗑️</span>
+          <h3 id="expiredCount">0</h3>
+          <p>ملف منتهي الصلاحية</p>
+        </div>
+        <div class="stat-card 3d">
+          <span class="emoji">📦</span>
+          <h3 id="spaceSave">0 MB</h3>
+          <p>يمكن توفيرها</p>
+        </div>
+        <div class="stat-card 3d">
+          <span class="emoji">♻️</span>
+          <h3 id="dupCount">0</h3>
+          <p>ملف مكرر</p>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <h2>🔥 صائد الملفات منتهية الصلاحية</h2>
+        <button id="scanBtn" class="small">🔍 افحص الآن</button>
+      </div>
+      <div id="expiredList" class="file-list"></div>
+    </section>
+
+    <!-- Explorer -->
+    <section id="tab-explorer" class="tab">
+      <div class="toolbar">
+        <div class="search">🔎 <input id="searchInput" placeholder="ابحث بالاسم أو المصدر..."></div>
+        <select id="sortSelect">
+          <option value="expiry_desc">الأكثر انتهاءً أولاً</option>
+          <option value="date_desc">الأحدث أولاً</option>
+          <option value="date_asc">الأقدم أولاً ⏳ لإعادة التسمية</option>
+          <option value="size_desc">الأكبر حجماً</option>
+        </select>
+      </div>
+      <div class="bulk-actions">
+        <button id="renameChronoBtn">✏️ إعادة تسمية زمنية ذكية</button>
+        <button id="createFolderBtn">📁 مجلد جديد بـ Gemini</button>
+        <button id="organizeBtn">🪄 ترتيب تلقائي</button>
+      </div>
+      <div id="explorerList" class="file-list"></div>
+    </section>
+
+    <!-- Gemini Brain -->
+    <section id="tab-gemini" class="tab">
+      <div class="chat-box" id="chatBox"></div>
+      <div class="chat-input">
+        <input id="chatInput" placeholder="قل لجيميناي: رتب صور رمضان، احذف تذاكر قديمة، سمّي الفيديوهات بالتاريخ...">
+        <button id="sendChatBtn">🚀</button>
+      </div>
+      <div class="quick-prompts">
+        <button data-prompt="افحص ملفات Download اللي لم تُفتح من 7 أيام واقترح حذفها">🧹 Download قديم</button>
+        <button data-prompt="أعد تسمية كل الصور والفيديوهات حسب تاريخ إنشائها بصيغة YYYY-MM-DD_HH-MM">✏️ تسمية زمنية</button>
+        <button data-prompt="ابحث عن الملفات المرتبطة بامتحانات انتهت">🎓 ملفات امتحانات منتهية</button>
+        <button data-prompt="أنشئ مجلدات منظمة: صور، فيديو، مستندات، مؤقت">📁 تنظيم ذكي</button>
+      </div>
+    </section>
+
+    <!-- Queue -->
+    <section id="tab-queue" class="tab">
+      <div class="queue-header">
+        <h2>⏳ طابور الحذف - صلاحيات جزئية</h2>
+        <p>جيميناي اقترح حذف هذه الملفات، بانتظار موافقتك</p>
+        <div class="queue-actions">
+          <button id="approveAllBtn" class="primary">✅ موافقة وحذف الكل</button>
+          <button id="rejectAllBtn">❌ رفض الكل</button>
+        </div>
+      </div>
+      <div id="queueList" class="file-list"></div>
+    </section>
+  </main>
+
+  <!-- Settings Drawer -->
+  <div id="settingsDrawer" class="drawer">
+    <div class="drawer-head">
+      <h3>⚙️ الإعدادات</h3>
+      <button id="closeSettings">✖️</button>
+    </div>
+    <div class="drawer-body">
+      <label>🔐 وضع الصلاحيات</label>
+      <div class="perm-toggle">
+        <button id="permPartial" class="active">🟡 جزئية - طابور انتظار (آمن)</button>
+        <button id="permFull">🔴 كاملة - حذف مباشر (جيميناي يحذف بنفسه)</button>
+      </div>
+      <p class="hint">في الجزئية: يجمع الملفات في الطابور وينتظر إذنك. في الكاملة: يحذف فوراً وينقل لسلة المهملات 30 يوم.</p>
+
+      <label>🗑️ سلة المهملات الذكية</label>
+      <div id="trashList" class="file-list small"></div>
+      <button id="emptyTrash">إفراغ السلة</button>
+
+      <label>🔑 مفتاح API</label>
+      <input id="settingsApiKey" type="password">
+      <button id="updateKey">تحديث</button>
+
+      <label>📊 النموذج</label>
+      <select id="settingsModel"></select>
+
+      <div class="perm-levels">
+        <h4>🛡️ مستويات الثقة (لا يتم لمس الأحمر أبداً)</h4>
+        <ul>
+          <li>🟢 آمن: .tmp .log .cache thumbnails - حذف تلقائي</li>
+          <li>🟡 متوسط: Downloads لم يفتح، تذاكر قديمة، ملازم - اسألني</li>
+          <li>🔴 محظور: DCIM/Camera عائلية، بطاقات، كلمات سر - ممنوع لمسه</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
